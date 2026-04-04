@@ -1,0 +1,17 @@
+.env
+.tmp/
+data/exports/
+__pycache__/
+*.pyc
+*.pyo
+node_modules/
+frontend/dist/
+frontend/.vite/
+*.log
+
+# Ignore Assets and Rules folders
+Rules/
+Template/
+UI_design/
+data/settings.json
+data/history.json
