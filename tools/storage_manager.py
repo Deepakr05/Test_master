@@ -96,13 +96,15 @@ def load_settings() -> dict:
             print(f"Supabase settings load error: {e}")
 
     # 2. Try Local (Fallback/Dev)
-    if SETTINGS_FILE.exists():
-        try:
+    try:
+        if SETTINGS_FILE.exists():
             with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
                 stored = json.load(f)
-            _deep_merge(merged, stored)
-        except Exception as e:
-            print(f"Local settings load error: {e}")
+                if stored:
+                    _deep_merge(merged, stored)
+    except Exception as e:
+        # Expected on some cloud environments where Path.exists() is unreliable but file is missing
+        print(f"Local settings load bypassed: {e}")
 
     # 3. Vercel env overrides (Highest Priority)
     if os.getenv("OPENAI_API_KEY"): merged["llm"]["providers"]["openai"]["api_key"] = os.getenv("OPENAI_API_KEY")
@@ -128,10 +130,13 @@ def save_settings(settings: dict) -> None:
 
     # 2. Local (Primary for Dev, fails gracefully on Vercel)
     try:
+        # Check if directory exists before writing
+        SETTINGS_FILE.parent.mkdir(exist_ok=True)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(settings, f, indent=2)
     except Exception as e:
-        print(f"Local settings save suppressed (expected on Vercel): {e}")
+        # Logged to Vercel console, but doesn't crash the request
+        print(f"Local settings save suppressed: {e}")
 
 
 def get_settings_masked() -> dict:
