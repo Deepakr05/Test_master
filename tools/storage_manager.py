@@ -188,6 +188,7 @@ def _smart_merge(base: dict, override: dict) -> None:
         # Strip all strings coming from UI to prevent accidental white space
         if isinstance(v, str):
             v = v.strip()
+            override[k] = v  # IMPORTANT: Update the source dictionary too!
 
         if isinstance(v, str) and (v.startswith("•") or v.startswith("...•")):
             # It's a masked key from the UI, IGNORE IT (keep the base value)
