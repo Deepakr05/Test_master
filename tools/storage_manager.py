@@ -182,10 +182,13 @@ def load_history() -> list:
         except Exception as e:
             print(f"Supabase read error: {e}")
             
-    if not HISTORY_FILE.exists():
-        return []
-    with open(HISTORY_FILE, "r", encoding="utf-8") as f:
-        return json.load(f)
+    try:
+        if HISTORY_FILE.exists():
+            with open(HISTORY_FILE, "r", encoding="utf-8") as f:
+                return json.load(f)
+    except Exception as e:
+        print(f"Local history load error (ignored on Vercel): {e}")
+    return []
 
 
 def save_test_plan(record: dict) -> None:
@@ -204,11 +207,11 @@ def save_test_plan(record: dict) -> None:
         history = [record if r["id"] == record["id"] else r for r in history]
     else:
         history.append(record)
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        try:
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(history, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass
+    except Exception:
+        pass
 
 
 def get_test_plan(plan_id: str) -> dict | None:
@@ -233,11 +236,11 @@ def delete_test_plan(plan_id: str) -> bool:
     new_history = [r for r in history if r["id"] != plan_id]
     if len(new_history) == len(history):
         return False
-    with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        try:
+    try:
+        with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(new_history, f, indent=2, ensure_ascii=False)
-        except OSError:
-            pass
+    except Exception:
+        pass
     return True
 
 
