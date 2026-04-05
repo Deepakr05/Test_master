@@ -107,13 +107,13 @@ def load_settings() -> dict:
         print(f"Local settings load bypassed: {e}")
 
     # 3. Vercel env overrides (Highest Priority)
-    if os.getenv("OPENAI_API_KEY"): merged["llm"]["providers"]["openai"]["api_key"] = os.getenv("OPENAI_API_KEY")
-    if os.getenv("ANTHROPIC_API_KEY"): merged["llm"]["providers"]["anthropic"]["api_key"] = os.getenv("ANTHROPIC_API_KEY")
-    if os.getenv("GEMINI_API_KEY"): merged["llm"]["providers"]["google"]["api_key"] = os.getenv("GEMINI_API_KEY")
-    if os.getenv("GROQ_API_KEY"): merged["llm"]["providers"]["groq"]["api_key"] = os.getenv("GROQ_API_KEY")
-    if os.getenv("JIRA_API_TOKEN"): merged["jira"]["api_token"] = os.getenv("JIRA_API_TOKEN")
-    if os.getenv("JIRA_EMAIL"): merged["jira"]["email"] = os.getenv("JIRA_EMAIL")
-    if os.getenv("JIRA_BASE_URL"): merged["jira"]["base_url"] = os.getenv("JIRA_BASE_URL")
+    if os.getenv("OPENAI_API_KEY"): merged["llm"]["providers"]["openai"]["api_key"] = str(os.getenv("OPENAI_API_KEY"))
+    if os.getenv("ANTHROPIC_API_KEY"): merged["llm"]["providers"]["anthropic"]["api_key"] = str(os.getenv("ANTHROPIC_API_KEY"))
+    if os.getenv("GEMINI_API_KEY"): merged["llm"]["providers"]["google"]["api_key"] = str(os.getenv("GEMINI_API_KEY"))
+    if os.getenv("GROQ_API_KEY"): merged["llm"]["providers"]["groq"]["api_key"] = str(os.getenv("GROQ_API_KEY"))
+    if os.getenv("JIRA_API_TOKEN"): merged["jira"]["api_token"] = str(os.getenv("JIRA_API_TOKEN"))
+    if os.getenv("JIRA_EMAIL"): merged["jira"]["email"] = str(os.getenv("JIRA_EMAIL"))
+    if os.getenv("JIRA_BASE_URL"): merged["jira"]["base_url"] = str(os.getenv("JIRA_BASE_URL"))
     
     return merged
 
@@ -155,8 +155,8 @@ def get_settings_masked() -> dict:
     return masked
 
 
-def _mask_key(key: str) -> str:
-    if not key or len(key) <= 4:
+def _mask_key(key: str | None) -> str:
+    if not key or not isinstance(key, str) or len(key) <= 4:
         return "••••"
     return "••••••••••••" + key[-4:]
 
