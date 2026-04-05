@@ -549,9 +549,17 @@ def settings_test():
 
         if connection_type == "jira":
             result = jira_test_connection(settings)
+            if not result.get("ok"):
+                source = settings["jira"].get("_source", "Unknown")
+                result["details"] = f"Key Source: {source}"
         else:
             provider = body.get("provider", settings["llm"]["active_provider"])
             result = llm_test_connection(provider, settings)
+            if not result.get("ok"):
+                provider_cfg = settings["llm"]["providers"].get(provider, {})
+                source = provider_cfg.get("_source", "Unknown")
+                preview = _mask_preview(provider_cfg.get("api_key"))
+                result["details"] = f"Source: {source} | Key Preview: {preview}"
 
         return ok(result)
     except Exception as e:
