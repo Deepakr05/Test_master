@@ -546,6 +546,33 @@ def settings_test():
         return err(str(e), 500)
 
 
+@app.route("/api/debug-config", methods=["GET"])
+def debug_config():
+    """Diagnostic route to trace API key sources (masked for security)."""
+    settings = load_settings()
+    debug = {
+        "jira": {
+            "source": settings["jira"].get("_source"),
+            "token_preview": _mask_preview(settings["jira"].get("api_token")),
+            "email": settings["jira"].get("email")
+        },
+        "llm_providers": {}
+    }
+    for p, cfg in settings.get("llm", {}).get("providers", {}).items():
+        debug["llm_providers"][p] = {
+            "source": cfg.get("_source"),
+            "key_preview": _mask_preview(cfg.get("api_key")),
+            "model": cfg.get("model")
+        }
+    return ok(debug)
+
+
+def _mask_preview(key: str | None) -> str:
+    if not key or not isinstance(key, str) or len(key) < 6:
+        return "MISSING/SHORT"
+    return f"{key[:3]}...{key[-3:]} (len: {len(key)})"
+
+
 # ─── Helpers ─────────────────────────────────────────────────────────────────
 
 def _within_days(iso_str: str, days: int) -> bool:

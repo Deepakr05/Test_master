@@ -85,6 +85,11 @@ def load_settings() -> dict:
     """Load settings from Supabase (if available), then local JSON, with env overrides."""
     merged = DEFAULT_SETTINGS.copy()
     
+    # 0. Initialize sources for diagnostics
+    for provider in merged["llm"]["providers"]:
+        merged["llm"]["providers"][provider]["_source"] = "DEFAULT"
+    merged["jira"]["_source"] = "DEFAULT"
+
     # 1. Try Supabase
     sb = get_supabase()
     if sb:
@@ -92,6 +97,13 @@ def load_settings() -> dict:
             res = sb.table("settings").select("config").eq("id", "global").execute()
             if res.data and res.data[0].get("config"):
                 _deep_merge(merged, res.data[0]["config"])
+                # Mark as DB source if the key exists and is non-empty
+                db_config = res.data[0]["config"]
+                for p, cfg in db_config.get("llm", {}).get("providers", {}).items():
+                    if cfg.get("api_key") and p in merged["llm"]["providers"]:
+                        merged["llm"]["providers"][p]["_source"] = "SUPABASE_DB"
+                if db_config.get("jira", {}).get("api_token"):
+                    merged["jira"]["_source"] = "SUPABASE_DB"
         except Exception as e:
             print(f"Supabase settings load error: {e}")
 
@@ -102,16 +114,28 @@ def load_settings() -> dict:
                 stored = json.load(f)
                 if stored:
                     _deep_merge(merged, stored)
+                    # Note: we don't distinguish from DB for now as Vercel uses DB
     except Exception as e:
         # Expected on some cloud environments where Path.exists() is unreliable but file is missing
         print(f"Local settings load bypassed: {e}")
 
     # 3. Vercel env overrides (Highest Priority)
-    if os.getenv("OPENAI_API_KEY"): merged["llm"]["providers"]["openai"]["api_key"] = str(os.getenv("OPENAI_API_KEY"))
-    if os.getenv("ANTHROPIC_API_KEY"): merged["llm"]["providers"]["anthropic"]["api_key"] = str(os.getenv("ANTHROPIC_API_KEY"))
-    if os.getenv("GEMINI_API_KEY"): merged["llm"]["providers"]["google"]["api_key"] = str(os.getenv("GEMINI_API_KEY"))
-    if os.getenv("GROQ_API_KEY"): merged["llm"]["providers"]["groq"]["api_key"] = str(os.getenv("GROQ_API_KEY"))
-    if os.getenv("JIRA_API_TOKEN"): merged["jira"]["api_token"] = str(os.getenv("JIRA_API_TOKEN"))
+    def env_ovr(provider_key, env_key):
+        val = os.getenv(env_key)
+        if val:
+            merged["llm"]["providers"][provider_key]["api_key"] = str(val)
+            merged["llm"]["providers"][provider_key]["_source"] = "VERCEL_ENV"
+
+    env_ovr("openai", "OPENAI_API_KEY")
+    env_ovr("anthropic", "ANTHROPIC_API_KEY")
+    env_ovr("google", "GEMINI_API_KEY")
+    env_ovr("groq", "GROQ_API_KEY")
+    
+    jira_token = os.getenv("JIRA_API_TOKEN")
+    if jira_token:
+        merged["jira"]["api_token"] = str(jira_token)
+        merged["jira"]["_source"] = "VERCEL_ENV"
+        
     if os.getenv("JIRA_EMAIL"): merged["jira"]["email"] = str(os.getenv("JIRA_EMAIL"))
     if os.getenv("JIRA_BASE_URL"): merged["jira"]["base_url"] = str(os.getenv("JIRA_BASE_URL"))
     
