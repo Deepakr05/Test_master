@@ -123,8 +123,10 @@ def load_settings() -> dict:
     def env_ovr(provider_key, env_key):
         val = os.getenv(env_key)
         if val:
-            merged["llm"]["providers"][provider_key]["api_key"] = str(val)
-            merged["llm"]["providers"][provider_key]["_source"] = "VERCEL_ENV"
+            # Strip whitespace to prevent invisible character errors
+            clean_val = str(val).strip()
+            merged["llm"]["providers"][provider_key]["api_key"] = clean_val
+            merged["llm"]["providers"][provider_key]["_source"] = f"VERCEL_ENV ({len(clean_val)} chars)"
 
     env_ovr("openai", "OPENAI_API_KEY")
     env_ovr("anthropic", "ANTHROPIC_API_KEY")
@@ -133,11 +135,12 @@ def load_settings() -> dict:
     
     jira_token = os.getenv("JIRA_API_TOKEN")
     if jira_token:
-        merged["jira"]["api_token"] = str(jira_token)
-        merged["jira"]["_source"] = "VERCEL_ENV"
+        clean_jira = str(jira_token).strip()
+        merged["jira"]["api_token"] = clean_jira
+        merged["jira"]["_source"] = f"VERCEL_ENV ({len(clean_jira)} chars)"
         
-    if os.getenv("JIRA_EMAIL"): merged["jira"]["email"] = str(os.getenv("JIRA_EMAIL"))
-    if os.getenv("JIRA_BASE_URL"): merged["jira"]["base_url"] = str(os.getenv("JIRA_BASE_URL"))
+    if os.getenv("JIRA_EMAIL"): merged["jira"]["email"] = str(os.getenv("JIRA_EMAIL")).strip()
+    if os.getenv("JIRA_BASE_URL"): merged["jira"]["base_url"] = str(os.getenv("JIRA_BASE_URL")).strip()
     
     return merged
 
@@ -151,7 +154,14 @@ def save_settings(new_settings: dict) -> None:
     _smart_merge(current_settings, new_settings)
     final_settings = current_settings
 
-    # 3. Supabase (Primary for Cloud)
+    # 3. Log debug information (Length and first 3 chars only for safety)
+    print("--- [DEBUG: STORAGE SAVE] ---")
+    for p, cfg in final_settings.get("llm", {}).get("providers", {}).items():
+        key = cfg.get("api_key", "")
+        if key and not key.startswith("•"):
+            print(f"[{p}] Key length: {len(key)} | Prefix: {key[:3]}...")
+    
+    # 4. Supabase (Primary for Cloud)
     sb = get_supabase()
     if sb:
         try:
@@ -159,15 +169,14 @@ def save_settings(new_settings: dict) -> None:
         except Exception as e:
             print(f"Supabase settings save error: {e}")
 
-    # 4. Local (Primary for Dev, fails gracefully on Vercel)
+    # 5. Local (Primary for Dev, fails gracefully on Vercel)
     try:
         # Check if directory exists before writing
         SETTINGS_FILE.parent.mkdir(exist_ok=True)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
             json.dump(final_settings, f, indent=2)
-    except Exception as e:
-        # Logged to Vercel console, but doesn't crash the request
-        print(f"Local settings save suppressed: {e}")
+    except Exception:
+        pass
 
 
 def _smart_merge(base: dict, override: dict) -> None:
@@ -176,6 +185,10 @@ def _smart_merge(base: dict, override: dict) -> None:
     that start with '•' (masked keys).
     """
     for k, v in override.items():
+        # Strip all strings coming from UI to prevent accidental white space
+        if isinstance(v, str):
+            v = v.strip()
+
         if isinstance(v, str) and (v.startswith("•") or v.startswith("...•")):
             # It's a masked key from the UI, IGNORE IT (keep the base value)
             continue
