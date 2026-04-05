@@ -12,11 +12,11 @@ from flask import Flask, request, jsonify, send_file
 from flask_cors import CORS
 from dotenv import load_dotenv
 
-# Load .env from project root
-load_dotenv(Path(__file__).parent / ".env")
+# Load .env from project root locally
+load_dotenv(Path(__file__).parent.parent / ".env")
 
-# Ensure tools/ is importable
-sys.path.insert(0, str(Path(__file__).parent))
+# Ensure tools/ is importable from root
+sys.path.insert(0, str(Path(__file__).parent.parent))
 
 from tools.storage_manager import (
     load_settings, save_settings, get_settings_masked,
