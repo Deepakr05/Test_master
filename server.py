@@ -405,20 +405,24 @@ def export(plan_id: str, fmt: str):
         if not record:
             return err(f"Test plan '{plan_id}' not found", 404)
 
-        from tools.storage_manager import save_test_plan as _save
         if fmt == "docx":
-            path = to_docx(record)
+            buffer = to_docx(record, output_path="buffer")
             mime = "application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+            ext = "docx"
         else:
-            path = to_pdf(record)
+            buffer = to_pdf(record, output_path="buffer")
             mime = "application/pdf"
+            ext = "pdf"
 
-        # Store export path
-        record.setdefault("export_paths", {})[fmt] = path
-        _save(record)
-
-        filename = Path(path).name
-        return send_file(path, mimetype=mime, as_attachment=True, download_name=filename)
+        date_str = datetime.now().strftime("%Y%m%d")
+        filename = f"{record['jira_id']}_{date_str}.{ext}"
+        
+        return send_file(
+            buffer,
+            mimetype=mime,
+            as_attachment=True,
+            download_name=filename
+        )
     except Exception as e:
         return err(f"Export failed: {e}", 500)
 

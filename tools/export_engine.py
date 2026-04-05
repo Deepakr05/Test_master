@@ -62,7 +62,12 @@ def to_docx(test_plan: dict, output_path: str | None = None) -> str:
     markdown = test_plan["content"]["markdown"]
     sections = _split_markdown_sections(markdown)
 
-    if not output_path:
+    # Allow yielding buffer if output_path strictly not used, 
+    # but for local parity we still set a default filename string unless instructed otherwise
+    use_buffer = False
+    if output_path == "buffer":
+        use_buffer = True
+    elif not output_path:
         date_str = datetime.now().strftime("%Y%m%d")
         fname = f"{jira_id}_{date_str}.docx"
         output_path = str(EXPORTS_DIR / fname)
@@ -109,6 +114,13 @@ def to_docx(test_plan: dict, output_path: str | None = None) -> str:
         for tc in tc_list:
             _write_test_case_to_doc(doc, tc)
 
+    if use_buffer:
+        import io
+        buffer = io.BytesIO()
+        doc.save(buffer)
+        buffer.seek(0)
+        return buffer
+        
     doc.save(output_path)
     return output_path
 
@@ -230,13 +242,20 @@ def to_pdf(test_plan: dict, output_path: str | None = None) -> str:
     jira_id = test_plan["jira_id"]
     markdown = test_plan["content"]["markdown"]
 
-    if not output_path:
+    use_buffer = False
+    if output_path == "buffer":
+        use_buffer = True
+        import io
+        output_target = io.BytesIO()
+    elif not output_path:
         date_str = datetime.now().strftime("%Y%m%d")
         fname = f"{jira_id}_{date_str}.pdf"
-        output_path = str(EXPORTS_DIR / fname)
+        output_target = str(EXPORTS_DIR / fname)
+    else:
+        output_target = output_path
 
     doc = SimpleDocTemplate(
-        output_path,
+        output_target,
         pagesize=A4,
         leftMargin=2 * cm,
         rightMargin=2 * cm,
@@ -397,7 +416,12 @@ def to_pdf(test_plan: dict, output_path: str | None = None) -> str:
             story.append(Spacer(1, 8))
 
     doc.build(story)
-    return output_path
+    
+    if use_buffer:
+        output_target.seek(0)
+        return output_target
+        
+    return output_target
 
 
 def _md_to_pdf(text: str) -> str:

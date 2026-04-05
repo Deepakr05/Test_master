@@ -19,7 +19,7 @@
 | LLM Output Format | **Structured Markdown** — 13 sections matching template headers |
 | DOCX Export | **python-docx** — maps markdown sections to template styles |
 | PDF Export | **reportlab** — pure Python, no system dependencies |
-| Storage | Local JSON files (`data/history.json`, `data/settings.json`) |
+| Storage | Supabase (PostgreSQL) for Vercel hosting, Local fallback for dev |
 | LLM Providers | OpenAI (GPT-4o), Anthropic (Claude), Google (Gemini) — all configurable |
 
 ---
@@ -179,7 +179,7 @@ The output MUST exactly follow this structure from `Template/Test Plan - Templat
 3. **Deterministic Storage:** Every generated test plan gets a unique ID: `TP-YYYYMMDD-NNN`.
 4. **Export Fidelity:** DOCX output must use `python-docx` and mirror the original template styles (headings, normal paragraphs, tables). PDF output uses `reportlab`.
 4a. **Markdown Contract:** The LLM MUST output structured Markdown with exact section headers matching the 13 template sections. The backend parser splits on these headers to populate `history.json`.
-5. **Local-First V1:** No cloud sync. All data in `data/` and `.tmp/`.
+5. **Vercel Enabled:** Vercel serverless integration using `supabase` as cloud storage for Test Plans instead of local files. API keys are strictly configured via Vercel Environment Variables.
 6. **Negative Cases:** When `include_negative_cases = true`, each test scenario must include at least one negative/edge test case.
 7. **Self-Annealing:** On any tool error, log to `progress.md` and retry once before surfacing the error to the UI.
 
