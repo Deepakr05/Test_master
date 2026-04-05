@@ -18,9 +18,12 @@ HISTORY_FILE = DATA_DIR / "history.json"
 SETTINGS_FILE = DATA_DIR / "settings.json"
 EXPORTS_DIR = DATA_DIR / "exports"
 
-# Ensure directories exist
-DATA_DIR.mkdir(exist_ok=True)
-EXPORTS_DIR.mkdir(exist_ok=True)
+# Ensure directories exist locally (fails gracefully on cloud Read-Only filesystems like Vercel)
+try:
+    DATA_DIR.mkdir(exist_ok=True)
+    EXPORTS_DIR.mkdir(exist_ok=True)
+except OSError:
+    pass
 
 def get_supabase():
     url = os.getenv("SUPABASE_URL")

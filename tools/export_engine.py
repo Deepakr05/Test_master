@@ -9,7 +9,10 @@ from datetime import datetime
 
 BASE_DIR = Path(__file__).parent.parent
 EXPORTS_DIR = BASE_DIR / "data" / "exports"
-EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+try:
+    EXPORTS_DIR.mkdir(parents=True, exist_ok=True)
+except OSError:
+    pass
 
 # ─── Markdown Parser (for sections) ──────────────────────────────────────────
 
