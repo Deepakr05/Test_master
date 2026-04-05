@@ -2,6 +2,6 @@
   "name": "test-master-vercel",
   "version": "1.0.0",
   "scripts": {
-    "build": "cd frontend && npm install && npm run build && cd .. && mkdir -p public && cp -r frontend/dist/* public/"
+    "build": "cd frontend && npm install && npm run build && cd .. && rm -rf public && mkdir -p public && cp -rf frontend/dist/* public/"
   }
 }
