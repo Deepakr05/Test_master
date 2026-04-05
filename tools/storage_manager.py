@@ -82,16 +82,29 @@ DEFAULT_SETTINGS = {
 # ─── Settings ────────────────────────────────────────────────────────────────
 
 def load_settings() -> dict:
-    """Load settings.json or return defaults, applied with OS env fallbacks."""
-    if not SETTINGS_FILE.exists():
-        merged = DEFAULT_SETTINGS.copy()
-    else:
-        with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
-            stored = json.load(f)
-        merged = DEFAULT_SETTINGS.copy()
-        _deep_merge(merged, stored)
+    """Load settings from Supabase (if available), then local JSON, with env overrides."""
+    merged = DEFAULT_SETTINGS.copy()
+    
+    # 1. Try Supabase
+    sb = get_supabase()
+    if sb:
+        try:
+            res = sb.table("settings").select("config").eq("id", "global").execute()
+            if res.data and res.data[0].get("config"):
+                _deep_merge(merged, res.data[0]["config"])
+        except Exception as e:
+            print(f"Supabase settings load error: {e}")
 
-    # Vercel env overrides
+    # 2. Try Local (Fallback/Dev)
+    if SETTINGS_FILE.exists():
+        try:
+            with open(SETTINGS_FILE, "r", encoding="utf-8") as f:
+                stored = json.load(f)
+            _deep_merge(merged, stored)
+        except Exception as e:
+            print(f"Local settings load error: {e}")
+
+    # 3. Vercel env overrides (Highest Priority)
     if os.getenv("OPENAI_API_KEY"): merged["llm"]["providers"]["openai"]["api_key"] = os.getenv("OPENAI_API_KEY")
     if os.getenv("ANTHROPIC_API_KEY"): merged["llm"]["providers"]["anthropic"]["api_key"] = os.getenv("ANTHROPIC_API_KEY")
     if os.getenv("GEMINI_API_KEY"): merged["llm"]["providers"]["google"]["api_key"] = os.getenv("GEMINI_API_KEY")
@@ -104,9 +117,21 @@ def load_settings() -> dict:
 
 
 def save_settings(settings: dict) -> None:
-    """Persist settings.json (writes raw including keys)."""
-    with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-        json.dump(settings, f, indent=2)
+    """Persist settings to Supabase and attempt local save."""
+    # 1. Supabase (Primary for Cloud)
+    sb = get_supabase()
+    if sb:
+        try:
+            sb.table("settings").upsert({"id": "global", "config": settings}).execute()
+        except Exception as e:
+            print(f"Supabase settings save error: {e}")
+
+    # 2. Local (Primary for Dev, fails gracefully on Vercel)
+    try:
+        with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
+            json.dump(settings, f, indent=2)
+    except Exception as e:
+        print(f"Local settings save suppressed (expected on Vercel): {e}")
 
 
 def get_settings_masked() -> dict:
@@ -175,7 +200,10 @@ def save_test_plan(record: dict) -> None:
     else:
         history.append(record)
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(history, f, indent=2, ensure_ascii=False)
+        try:
+            json.dump(history, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
 
 
 def get_test_plan(plan_id: str) -> dict | None:
@@ -201,7 +229,10 @@ def delete_test_plan(plan_id: str) -> bool:
     if len(new_history) == len(history):
         return False
     with open(HISTORY_FILE, "w", encoding="utf-8") as f:
-        json.dump(new_history, f, indent=2, ensure_ascii=False)
+        try:
+            json.dump(new_history, f, indent=2, ensure_ascii=False)
+        except OSError:
+            pass
     return True
 
 
