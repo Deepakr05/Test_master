@@ -1,16 +1,19 @@
 import { useState, useEffect, useMemo } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import axios from 'axios'
 
 export default function TestGenerator() {
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  const paramTc = searchParams.get('tc') || ''
+
   const [testCases, setTestCases] = useState([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
   // Filters
   const [jiraFilter, setJiraFilter] = useState('')
-  const [searchFilter, setSearchFilter] = useState('')
+  const [searchFilter, setSearchFilter] = useState(paramTc)
   const [statusFilter, setStatusFilter] = useState('all') // all, has_script, needs_script
 
   // CRUD & Generate State
@@ -42,6 +45,15 @@ export default function TestGenerator() {
   useEffect(() => {
     fetchCases()
   }, [])
+
+  useEffect(() => {
+    if (paramTc && testCases.length > 0) {
+      const match = testCases.find(tc => tc.id === paramTc)
+      if (match && match.playwright_script) {
+        setExpandedScripts(prev => new Set(prev).add(`${match.plan_id}-${match.id}`))
+      }
+    }
+  }, [paramTc, testCases])
 
   function handleGenerateScript(plan_id, tc_id) {
     setGenerateLoading(tc_id)
@@ -305,7 +317,11 @@ export default function TestGenerator() {
              {batchGenStatus !== null ? `⏳ Generating ${batchGenStatus}...` : '🤖 Generate Scripts'}
           </button>
           <button className="btn btn-outline" style={{ padding: '4px 8px', fontSize: 12 }} onClick={toggleAllExpanded} disabled={selectedIds.size === 0}>
-             👁️ View Scripts
+             👁️ {(() => {
+               const selectedWithScripts = testCases.filter(tc => selectedIds.has(`${tc.plan_id}-${tc.id}`) && tc.playwright_script);
+               const allAreExpanded = selectedWithScripts.length > 0 && selectedWithScripts.every(tc => expandedScripts.has(`${tc.plan_id}-${tc.id}`));
+               return allAreExpanded ? 'Hide Scripts' : 'View Scripts';
+             })()}
           </button>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input 

@@ -22,6 +22,8 @@ export default function TestCaseDashboard() {
   // CRUD State
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
+  const [cloningTc, setCloningTc] = useState(null)
+  const [cloneForm, setCloneForm] = useState(null)
   const [actionLoading, setActionLoading] = useState(false)
   const [generateLoading, setGenerateLoading] = useState(null)
 
@@ -96,19 +98,35 @@ export default function TestCaseDashboard() {
       .finally(() => setActionLoading(false))
   }
 
-  function handleDuplicate(tc) {
-    setActionLoading(true)
-    const payload = {
+  function startClone(tc) {
+    setCloningTc(tc)
+    setCloneForm({
       title: `${tc.title} (Copy)`,
       priority: tc.priority,
       type: tc.type,
-      preconditions: tc.preconditions,
-      steps: tc.steps,
-      expected_result: tc.expected_result,
-      test_data: tc.test_data
+      preconditions: (tc.preconditions || []).join('\n'),
+      steps: (tc.steps || []).join('\n'),
+      expected_result: tc.expected_result || '',
+      test_data: JSON.stringify(tc.test_data || {}, null, 2)
+    })
+  }
+
+  function submitClone() {
+    setActionLoading(true)
+    let parsedData = {}
+    try { parsedData = JSON.parse(cloneForm.test_data) } catch(e) {}
+
+    const payload = {
+      title: cloneForm.title,
+      priority: cloneForm.priority,
+      type: cloneForm.type,
+      preconditions: cloneForm.preconditions.split('\n').map(s=>s.trim()).filter(Boolean),
+      steps: cloneForm.steps.split('\n').map(s=>s.trim()).filter(Boolean),
+      expected_result: cloneForm.expected_result,
+      test_data: parsedData
     }
-    axios.post(`/api/test-cases/${tc.plan_id}`, payload)
-      .then(() => { fetchCases(); showToast('Test case duplicated!', 'success') })
+    axios.post(`/api/test-cases/${cloningTc.plan_id}`, payload)
+      .then(() => { fetchCases(); setPage(1); setCloningTc(null); showToast('Test case duplicated!', 'success') })
       .catch(e => showToast(e.response?.data?.error || 'Failed to duplicate test case', 'error'))
       .finally(() => setActionLoading(false))
   }
@@ -133,7 +151,7 @@ export default function TestCaseDashboard() {
                           tc.title.toLowerCase().includes(searchFilter.toLowerCase()) || 
                           (tc.type || '').toLowerCase().includes(searchFilter.toLowerCase())
       return matchJira && matchSearch
-    })
+    }).reverse()
   }, [testCases, jiraFilter, searchFilter])
 
   // Get unique Jira IDs for autocomplete/dropdown (optional, but good for UX)
@@ -328,7 +346,7 @@ export default function TestCaseDashboard() {
                     <button 
                       className="btn btn-ghost" 
                       style={{ fontSize: 11, padding: '4px 8px' }}
-                      onClick={() => handleDuplicate(tc)}
+                      onClick={() => startClone(tc)}
                       disabled={actionLoading}
                     >
                       ➕ Clone
@@ -341,6 +359,15 @@ export default function TestCaseDashboard() {
                     >
                       {generateLoading === tc.id ? '⏳ Gen...' : (tc.playwright_script ? '🔄 Regen' : '🤖 Gen')}
                     </button>
+                    {tc.playwright_script && (
+                      <button 
+                        className="btn btn-ghost" 
+                        style={{ fontSize: 11, padding: '4px 8px', color: 'var(--cyan)' }}
+                        onClick={() => navigate(`/test-generator?tc=${tc.id}`)}
+                      >
+                        👁️ View Script
+                      </button>
+                    )}
                     <button 
                       className="btn btn-ghost" 
                       style={{ fontSize: 11, padding: '4px 8px', color: 'var(--red)' }}
@@ -396,6 +423,64 @@ export default function TestCaseDashboard() {
       {toast && (
         <div className={`toast toast-${toast.type}`}>
           {toast.type === 'success' ? '✅' : '❌'} {toast.msg}
+        </div>
+      )}
+
+      {/* Clone Modal */}
+      {cloningTc && cloneForm && (
+        <div className="modal-overlay" onClick={() => setCloningTc(null)}>
+          <div className="modal-content" onClick={e => e.stopPropagation()}>
+            <h2 style={{ fontSize: 18, marginBottom: 16 }}>Clone Test Case {cloningTc.id}</h2>
+            
+            <div style={{ display: 'flex', gap: 12, marginBottom: 12 }}>
+              <div style={{ flex: 1 }}>
+                <label className="form-label">Title</label>
+                <input className="form-input" value={cloneForm.title} onChange={e => setCloneForm({...cloneForm, title: e.target.value})} />
+              </div>
+              <div style={{ width: 120 }}>
+                <label className="form-label">Priority</label>
+                <select className="form-select" value={cloneForm.priority} onChange={e => setCloneForm({...cloneForm, priority: e.target.value})}>
+                  <option value="High">High</option>
+                  <option value="Medium">Medium</option>
+                  <option value="Low">Low</option>
+                </select>
+              </div>
+              <div style={{ width: 120 }}>
+                <label className="form-label">Type</label>
+                <select className="form-select" value={cloneForm.type} onChange={e => setCloneForm({...cloneForm, type: e.target.value})}>
+                  <option value="Positive">Positive</option>
+                  <option value="Negative">Negative</option>
+                  <option value="Edge">Edge Case</option>
+                </select>
+              </div>
+            </div>
+            
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 16 }}>
+              <div>
+                <label className="form-label">Preconditions (1 per line)</label>
+                <textarea className="form-input" rows="3" value={cloneForm.preconditions} onChange={e => setCloneForm({...cloneForm, preconditions: e.target.value})} />
+                <div style={{ marginTop: 12 }}>
+                  <label className="form-label">Steps (1 per line)</label>
+                  <textarea className="form-input" rows="4" value={cloneForm.steps} onChange={e => setCloneForm({...cloneForm, steps: e.target.value})} />
+                </div>
+              </div>
+              <div>
+                <label className="form-label">Expected Result</label>
+                <textarea className="form-input" style={{ height: 42 }} value={cloneForm.expected_result} onChange={e => setCloneForm({...cloneForm, expected_result: e.target.value})} />
+                <div style={{ marginTop: 12 }}>
+                  <label className="form-label">Test Data (JSON)</label>
+                  <textarea className="form-input" rows="4" style={{ fontFamily: 'monospace' }} value={cloneForm.test_data} onChange={e => setCloneForm({...cloneForm, test_data: e.target.value})} />
+                </div>
+              </div>
+            </div>
+            
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'flex-end', marginTop: 24, paddingTop: 16, borderTop: '1px solid var(--border)' }}>
+              <button className="btn btn-outline" onClick={() => setCloningTc(null)} disabled={actionLoading}>Cancel</button>
+              <button className="btn btn-primary" onClick={submitClone} disabled={actionLoading}>
+                {actionLoading ? 'Saving...' : 'Clone Test Case'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

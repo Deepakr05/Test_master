@@ -58,7 +58,7 @@ export default function Dashboard() {
     <div className="fade-in">
       <div className="page-header">
         <div>
-          <h1 className="page-title">Dashboard / Test Plans</h1>
+          <h1 className="page-title">Test Plan Dashboard</h1>
           <p className="page-subtitle">Overview of all generated test plans</p>
         </div>
         <div className="search-bar" style={{ width: 260 }}>

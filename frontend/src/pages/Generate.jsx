@@ -21,7 +21,7 @@ export default function Generate() {
   const [issueLoading, setIssueLoading] = useState(false)
   const [issueError,   setIssueError]   = useState('')
 
-  const [provider,       setProvider]       = useState('openai')
+
   const [formats,        setFormats]        = useState(['unit','integration','e2e'])
   const [negCases,       setNegCases]       = useState(true)
   const [subTasks,       setSubTasks]       = useState(true)
@@ -79,7 +79,6 @@ export default function Generate() {
     try {
       const r = await axios.post('/api/generate', {
         jira_issue_id:        issue.id,
-        llm_provider:         provider,
         include_sub_tasks:    subTasks,
         include_negative_cases: negCases,
         detail_level:         detailLevel,
@@ -284,15 +283,6 @@ export default function Generate() {
         {/* Right: Config Panel */}
         <div className="card" style={{ position: 'sticky', top: 20, display: 'flex', flexDirection: 'column', gap: 14 }}>
           <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 4 }}>Test Plan Configuration</div>
-
-          <div className="form-group">
-            <label className="form-label">LLM Provider</label>
-            <select className="form-select" value={provider} onChange={e => setProvider(e.target.value)}>
-              {PROVIDERS.map(p => (
-                <option key={p} value={p}>{p.charAt(0).toUpperCase() + p.slice(1)}</option>
-              ))}
-            </select>
-          </div>
 
           <div className="form-group">
             <label className="form-label">Detail Level</label>

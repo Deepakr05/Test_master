@@ -24,6 +24,7 @@ export default function ViewPlan() {
   const [error,   setError]   = useState('')
   const [section, setSection] = useState('full document')
   const [exporting, setExporting] = useState({ docx: false, pdf: false })
+  const [showExport, setShowExport] = useState(false)
   const [toast, setToast] = useState(null)
 
   useEffect(() => {
@@ -83,12 +84,21 @@ export default function ViewPlan() {
         </div>
         <div style={{ display:'flex', gap:8 }}>
           <button className="btn btn-outline" onClick={() => { navigator.clipboard.writeText(location.href); showToast('Link copied!','success') }}>⇗ Share</button>
-          <button className="btn btn-outline" onClick={() => handleExport('docx')} disabled={exporting.docx}>
-            {exporting.docx ? <span className="spinner" style={{width:14,height:14}} /> : '📄'} DOCX
-          </button>
-          <button className="btn btn-outline" onClick={() => handleExport('pdf')} disabled={exporting.pdf}>
-            {exporting.pdf ? <span className="spinner" style={{width:14,height:14}} /> : '📕'} PDF
-          </button>
+          <div style={{ position: 'relative' }}>
+            <button className="btn btn-outline" onClick={() => setShowExport(!showExport)}>
+              📥 Export ▼
+            </button>
+            {showExport && (
+              <div style={{ position: 'absolute', top: '100%', right: 0, marginTop: 4, background: 'var(--bg-card)', border: '1px solid var(--border)', borderRadius: 'var(--radius)', padding: 4, display: 'flex', flexDirection: 'column', gap: 4, zIndex: 10 }}>
+                <button className="btn btn-ghost" onClick={() => { setShowExport(false); handleExport('docx'); }} disabled={exporting.docx} style={{ justifyContent: 'flex-start', fontSize: 12 }}>
+                  {exporting.docx ? <span className="spinner" style={{width:14,height:14}} /> : '📄'} DOCX
+                </button>
+                <button className="btn btn-ghost" onClick={() => { setShowExport(false); handleExport('pdf'); }} disabled={exporting.pdf} style={{ justifyContent: 'flex-start', fontSize: 12 }}>
+                  {exporting.pdf ? <span className="spinner" style={{width:14,height:14}} /> : '📕'} PDF
+                </button>
+              </div>
+            )}
+          </div>
           <button className="btn btn-primary" onClick={() => navigate(`/generate?jira=${plan.jira_id}`)}>↺ Regenerate</button>
         </div>
       </div>
@@ -214,10 +224,6 @@ export default function ViewPlan() {
           <div style={{ marginTop:14, fontSize:12, color:'var(--text-muted)', marginBottom:4 }}>{reviewed} of {tcs.length} reviewed</div>
           <div className="progress-bar-wrap" style={{ marginBottom:16 }}>
             <div className="progress-bar-fill" style={{ width:`${tcs.length ? (reviewed/tcs.length)*100 : 0}%` }} />
-          </div>
-          <div style={{ display:'flex', flexDirection:'column', gap:8 }}>
-            <button className="btn btn-primary" style={{ width:'100%',justifyContent:'center' }} onClick={() => handleExport('docx')} disabled={exporting.docx}>Export DOCX</button>
-            <button className="btn btn-outline" style={{ width:'100%',justifyContent:'center' }} onClick={() => handleExport('pdf')} disabled={exporting.pdf}>Export PDF</button>
           </div>
         </div>
       </div>
