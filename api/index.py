@@ -3,32 +3,47 @@ server.py — Layer 2 Navigation (Flask API)
 Routes all requests between frontend and Layer 3 tools.
 """
 import os
-import sys
-import json
-from pathlib import Path
-from datetime import datetime
+import traceback
 
-from flask import Flask, request, jsonify, send_file
-from flask_cors import CORS
-from dotenv import load_dotenv
+# -- THE SAFETY NET --
+# If any of the project's internal imports fail, we want to know why!
+try:
+    from pathlib import Path
+    from datetime import datetime
+    from flask import Flask, request, jsonify, send_file
+    from flask_cors import CORS
+    from dotenv import load_dotenv
 
-# Load .env from project root locally
-load_dotenv(Path(__file__).parent.parent / ".env")
+    # Load .env IF it exists (don't crash if it doesn't)
+    env_path = Path(__file__).parent.parent / ".env"
+    if env_path.exists():
+        load_dotenv(env_path)
 
-# Ensure tools/ is importable from root
-sys.path.insert(0, str(Path(__file__).parent.parent))
+    # Ensure tools/ is importable from root
+    root_path = str(Path(__file__).parent.parent)
+    if root_path not in sys.path:
+        sys.path.insert(0, root_path)
 
-from tools.storage_manager import (
-    load_settings, save_settings, get_settings_masked,
-    load_history, get_test_plan, delete_test_plan, get_stats,
-)
-from tools.jira_client import fetch_issue, test_connection as jira_test_connection
-from tools.llm_client import test_connection as llm_test_connection
-from tools.test_plan_generator import generate_test_plan
-from tools.export_engine import to_docx, to_pdf
+    from tools.storage_manager import (
+        load_settings, save_settings, get_settings_masked,
+        load_history, get_test_plan, delete_test_plan, get_stats,
+    )
+    from tools.jira_client import fetch_issue, test_connection as jira_test_connection
+    from tools.llm_client import test_connection as llm_test_connection
+    from tools.test_plan_generator import generate_test_plan
+    from tools.export_engine import to_docx, to_pdf
 
-app = Flask(__name__)
-CORS(app, resources={r"/api/*": {"origins": "*"}})
+    app = Flask(__name__)
+    CORS(app, resources={r"/api/*": {"origins": "*"}})
+
+except Exception as e:
+    # This will catch ModuleNotFoundError or any other import error
+    app = Flask(__name__)
+    @app.route("/<path:p>")
+    @app.route("/")
+    def crash_report(p=""):
+        tb = traceback.format_exc()
+        return f"<pre>BOOTSTRAP CRASH:\n{tb}\n\nPATH: {os.getcwd()}\nSYS.PATH: {sys.path}</pre>", 500
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
