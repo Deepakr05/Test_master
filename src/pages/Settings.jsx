@@ -219,6 +219,11 @@ export default function Settings() {
                   {testResults[activeEdit] && (
                     <div style={{ marginTop: 12, fontSize: 13, color: testResults[activeEdit].ok ? 'var(--green)' : 'var(--red)' }}>
                       {testResults[activeEdit].ok ? '✅ Connection successful!' : `❌ ${testResults[activeEdit].error}`}
+                      {!testResults[activeEdit].ok && testResults[activeEdit].details && (
+                        <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                          {testResults[activeEdit].details}
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>
@@ -255,6 +260,11 @@ export default function Settings() {
                 {testResults.jira && (
                   <div style={{ marginTop: 12, fontSize: 13, color: testResults.jira.ok ? 'var(--green)' : 'var(--red)' }}>
                     {testResults.jira.ok ? `✅ Connected as ${testResults.jira.user}` : `❌ ${testResults.jira.error}`}
+                    {!testResults.jira.ok && testResults.jira.details && (
+                      <div style={{ fontSize: 11, color: 'var(--text-muted)', marginTop: 4 }}>
+                        {testResults.jira.details}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
