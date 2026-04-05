@@ -118,25 +118,48 @@ def load_settings() -> dict:
     return merged
 
 
-def save_settings(settings: dict) -> None:
-    """Persist settings to Supabase and attempt local save."""
-    # 1. Supabase (Primary for Cloud)
+def save_settings(new_settings: dict) -> None:
+    """Persist settings to Supabase and attempt local save, merging safely to ignore masks."""
+    # 1. Fetch current settings to prepare for smart merge
+    current_settings = load_settings()
+    
+    # 2. Perform a smart merge (ignore any fields in new_settings that are masked with '•')
+    _smart_merge(current_settings, new_settings)
+    final_settings = current_settings
+
+    # 3. Supabase (Primary for Cloud)
     sb = get_supabase()
     if sb:
         try:
-            sb.table("settings").upsert({"id": "global", "config": settings}).execute()
+            sb.table("settings").upsert({"id": "global", "config": final_settings}).execute()
         except Exception as e:
             print(f"Supabase settings save error: {e}")
 
-    # 2. Local (Primary for Dev, fails gracefully on Vercel)
+    # 4. Local (Primary for Dev, fails gracefully on Vercel)
     try:
         # Check if directory exists before writing
         SETTINGS_FILE.parent.mkdir(exist_ok=True)
         with open(SETTINGS_FILE, "w", encoding="utf-8") as f:
-            json.dump(settings, f, indent=2)
+            json.dump(final_settings, f, indent=2)
     except Exception as e:
         # Logged to Vercel console, but doesn't crash the request
         print(f"Local settings save suppressed: {e}")
+
+
+def _smart_merge(base: dict, override: dict) -> None:
+    """
+    Recursively merge override into base, but SKIP any string values 
+    that start with '•' (masked keys).
+    """
+    for k, v in override.items():
+        if isinstance(v, str) and (v.startswith("•") or v.startswith("...•")):
+            # It's a masked key from the UI, IGNORE IT (keep the base value)
+            continue
+        
+        if k in base and isinstance(base[k], dict) and isinstance(v, dict):
+            _smart_merge(base[k], v)
+        else:
+            base[k] = v
 
 
 def get_settings_masked() -> dict:
