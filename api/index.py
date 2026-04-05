@@ -1,17 +1,16 @@
-"""
-server.py — Layer 2 Navigation (Flask API)
-Routes all requests between frontend and Layer 3 tools.
-"""
-import os
+import sys
 import traceback
+from flask import Flask, request, jsonify, send_file
+from flask_cors import CORS
+
+app = Flask(__name__)
+CORS(app, resources={r"/api/*": {"origins": "*"}})
 
 # -- THE SAFETY NET --
-# If any of the project's internal imports fail, we want to know why!
+BOOTSTRAP_ERROR = None
 try:
     from pathlib import Path
     from datetime import datetime
-    from flask import Flask, request, jsonify, send_file
-    from flask_cors import CORS
     from dotenv import load_dotenv
 
     # Load .env IF it exists (don't crash if it doesn't)
@@ -33,17 +32,15 @@ try:
     from tools.test_plan_generator import generate_test_plan
     from tools.export_engine import to_docx, to_pdf
 
-    app = Flask(__name__)
-    CORS(app, resources={r"/api/*": {"origins": "*"}})
-
 except Exception as e:
-    # This will catch ModuleNotFoundError or any other import error
-    app = Flask(__name__)
-    @app.route("/<path:p>")
-    @app.route("/")
-    def crash_report(p=""):
-        tb = traceback.format_exc()
-        return f"<pre>BOOTSTRAP CRASH:\n{tb}\n\nPATH: {os.getcwd()}\nSYS.PATH: {sys.path}</pre>", 500
+    BOOTSTRAP_ERROR = traceback.format_exc()
+
+# Fallback route in case of bootstrap failure
+@app.route("/api/bootstrap-check")
+def bootstrap_check():
+    if BOOTSTRAP_ERROR:
+        return f"<pre>BOOTSTRAP CRASH:\n{BOOTSTRAP_ERROR}\n\nPATH: {os.getcwd()}\nSYS.PATH: {sys.path}</pre>", 500
+    return jsonify({"status": "ok", "message": "Bootstrap successful"}), 200
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
