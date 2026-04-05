@@ -30,22 +30,19 @@ export default function Settings() {
   }
 
   function updateField(path, value) {
-    if (!settings) return;
+    console.log(`[Update] ${path} -> ${value ? (value.length > 5 ? value.slice(0, 5) + '...' : value) : 'empty'}`)
     setSettings(prev => {
-      try {
-        const clone = JSON.parse(JSON.stringify(prev))
-        const keys = path.split('.')
-        let obj = clone
-        for (let i = 0; i < keys.length - 1; i++) {
-          if (!obj[keys[i]]) obj[keys[i]] = {} // Ensure nested paths exist
-          obj = obj[keys[i]]
-        }
-        obj[keys[keys.length - 1]] = value
-        return clone
-      } catch (err) {
-        console.error("Settings update error:", err)
-        return prev
+      const clone = { ...prev }
+      const keys = path.split('.')
+      const lastKey = keys.pop()
+      let current = clone
+      for (const k of keys) {
+        if (!current[k]) current[k] = {}
+        current[k] = { ...current[k] }
+        current = current[k]
       }
+      current[lastKey] = value
+      return clone
     })
   }
 
