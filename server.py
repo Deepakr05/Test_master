@@ -258,6 +258,54 @@ def tc_delete(plan_id: str, tc_id: str):
         return err(str(e), 500)
 
 
+@app.route("/api/generate-script/<string:plan_id>/<string:tc_id>", methods=["POST"])
+def generate_script(plan_id: str, tc_id: str):
+    try:
+        from tools.storage_manager import load_settings, save_test_plan
+        from tools.llm_client import generate
+        
+        record = get_test_plan(plan_id)
+        if not record: return err("Plan not found", 404)
+        
+        tcs = record.get("content", {}).get("test_cases", [])
+        tc = next((t for t in tcs if t.get("id") == tc_id), None)
+        if not tc: return err("Test case not found", 404)
+        
+        settings = load_settings()
+        provider = settings.get("llm", {}).get("active_provider", "openai")
+        
+        system_prompt = "You are an expert QA engineer writing robust Playwright TypeScript tests. ONLY return valid TypeScript code. Do not wrap code in markdown fences if possible."
+        
+        prompt = f"""Generate a pure Playwright TypeScript test for the following test case:
+Title: {tc.get('title')}
+Preconditions: {', '.join(tc.get('preconditions', []))}
+Steps: {', '.join(tc.get('steps', []))}
+Expected Result: {tc.get('expected_result')}
+Test Data: {json.dumps(tc.get('test_data', {}))}
+
+Return valid TypeScript code starting with import {{ test, expect }} from '@playwright/test';
+"""
+        
+        script = generate(prompt, system_prompt, provider, settings).strip()
+        
+        # Clean markdown fences
+        if script.startswith("```"):
+            lines = script.split("\n")
+            if len(lines) > 1 and lines[0].startswith("```"):
+                lines = lines[1:]
+            if len(lines) > 0 and lines[-1].strip() == "```":
+                lines = lines[:-1]
+            script = "\n".join(lines).strip()
+            
+        tc["playwright_script"] = script
+        record["content"]["test_cases"] = tcs
+        save_test_plan(record)
+        
+        return ok({"playwright_script": script})
+    except Exception as e:
+        return err(str(e), 500)
+
+
 @app.route("/api/history/<string:plan_id>", methods=["GET"])
 def history_detail(plan_id: str):
     """Get full test plan record including markdown content."""
@@ -299,6 +347,54 @@ def history_star(plan_id: str):
 
 # ─── Export ───────────────────────────────────────────────────────────────────
 
+@app.route("/api/export-scripts", methods=["POST"])
+def export_scripts():
+    """Export test scripts as a ZIP grouped by Jira IDs."""
+    try:
+        import io, zipfile
+        body = request.get_json(force=True) or {}
+        scripts = body.get("scripts", [])
+        
+        if not scripts:
+            return err("No scripts provided", 400)
+            
+        grouped = {}
+        for s in scripts:
+            jid = s.get("jira_id")
+            if not jid: 
+                jid = "UNCATEGORIZED"
+            grouped.setdefault(jid, []).append(s)
+            
+        mem_zip = io.BytesIO()
+        with zipfile.ZipFile(mem_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            for jid, items in grouped.items():
+                file_content = f"import {{ test, expect }} from '@playwright/test';\n\n"
+                
+                for tc in items:
+                    file_content += f"// ==========================================\n"
+                    file_content += f"// Test Case: {tc.get('tc_id', '')} - {tc.get('title', '')}\n"
+                    file_content += f"// ==========================================\n\n"
+                    
+                    # Remove any native imports since we injected them at top
+                    script = tc.get("playwright_script", "")
+                    lines = script.split("\n")
+                    clean_lines = [l for l in lines if not l.startswith("import { test")]
+                    file_content += "\n".join(clean_lines).strip()
+                    file_content += "\n\n"
+                    
+                zf.writestr(f"{jid}.spec.ts", file_content)
+                
+        mem_zip.seek(0)
+        return send_file(
+            mem_zip,
+            mimetype="application/zip",
+            as_attachment=True,
+            download_name="playwright_scripts.zip"
+        )
+    except Exception as e:
+        return err(f"Export failed: {e}", 500)
+
+
 @app.route("/api/export/<string:plan_id>/<string:fmt>", methods=["GET"])
 def export(plan_id: str, fmt: str):
     """Export test plan as docx or pdf. Streams the file."""
@@ -328,6 +424,62 @@ def export(plan_id: str, fmt: str):
 
 
 # ─── Settings ─────────────────────────────────────────────────────────────────
+
+@app.route("/api/settings/providers", methods=["GET"])
+def settings_providers():
+    """Lightweight list of LLM providers for sidebar selector."""
+    try:
+        settings = load_settings()
+        active = settings.get("llm", {}).get("active_provider", "openai")
+        providers = settings.get("llm", {}).get("providers", {})
+        result = []
+        for key, cfg in providers.items():
+            has_key = bool(cfg.get("api_key", "")) and cfg.get("api_key", "") != ""
+            if key == "local_llm":
+                has_key = True  # Local LLM doesn't need a real key
+            result.append({
+                "id": key,
+                "model": cfg.get("model", ""),
+                "has_key": has_key,
+                "active": key == active,
+            })
+        return ok({"active_provider": active, "providers": result})
+    except Exception as e:
+        return err(str(e), 500)
+
+
+@app.route("/api/settings/active-provider", methods=["PATCH"])
+def settings_active_provider():
+    """Switch the active LLM provider. Only validates key for the selected provider."""
+    try:
+        body = request.get_json(force=True) or {}
+        provider = body.get("provider", "").strip()
+        if not provider:
+            return err("provider is required")
+
+        settings = load_settings()
+        known = settings.get("llm", {}).get("providers", {})
+        if provider not in known:
+            return err(f"Unknown provider: '{provider}'")
+
+        # Only validate the API key for the provider being selected
+        cfg = known[provider]
+        if provider != "local_llm" and not cfg.get("api_key", ""):
+            return err(
+                f"No API key configured for '{provider}'. "
+                "Go to Settings → LLM Models to add one.",
+                400,
+            )
+
+        settings["llm"]["active_provider"] = provider
+        save_settings(settings)
+        return ok({
+            "active_provider": provider,
+            "model": cfg.get("model", ""),
+        })
+    except Exception as e:
+        return err(str(e), 500)
+
 
 @app.route("/api/settings", methods=["GET"])
 def settings_get():

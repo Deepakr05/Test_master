@@ -23,6 +23,27 @@ export default function TestCaseDashboard() {
   const [editingId, setEditingId] = useState(null)
   const [editForm, setEditForm] = useState({})
   const [actionLoading, setActionLoading] = useState(false)
+  const [generateLoading, setGenerateLoading] = useState(null)
+
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+  
+  const [toast, setToast] = useState(null)
+  function showToast(msg, type = 'info') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
+
+  function handleGenerateScript(plan_id, tc_id) {
+    setGenerateLoading(tc_id)
+    axios.post(`/api/generate-script/${plan_id}/${tc_id}`)
+      .then(() => {
+        fetchCases()
+        showToast('Script generated successfully!', 'success')
+      })
+      .catch(e => showToast(e.response?.data?.error || 'Failed to generate script', 'error'))
+      .finally(() => setGenerateLoading(null))
+  }
 
   const fetchCases = () => {
     axios.get('/api/test-cases')
@@ -69,8 +90,9 @@ export default function TestCaseDashboard() {
       .then(() => {
         setEditingId(null)
         fetchCases()
+        showToast('Test case saved successfully!', 'success')
       })
-      .catch(e => alert(e.response?.data?.error || 'Failed to update test case'))
+      .catch(e => showToast(e.response?.data?.error || 'Failed to update test case', 'error'))
       .finally(() => setActionLoading(false))
   }
 
@@ -86,8 +108,8 @@ export default function TestCaseDashboard() {
       test_data: tc.test_data
     }
     axios.post(`/api/test-cases/${tc.plan_id}`, payload)
-      .then(() => fetchCases())
-      .catch(e => alert(e.response?.data?.error || 'Failed to duplicate test case'))
+      .then(() => { fetchCases(); showToast('Test case duplicated!', 'success') })
+      .catch(e => showToast(e.response?.data?.error || 'Failed to duplicate test case', 'error'))
       .finally(() => setActionLoading(false))
   }
 
@@ -97,8 +119,9 @@ export default function TestCaseDashboard() {
     axios.delete(`/api/test-cases/${plan_id}/${tc_id}`)
       .then(() => {
         fetchCases()
+        showToast('Test case deleted.', 'success')
       })
-      .catch(e => alert(e.response?.data?.error || 'Failed to delete test case'))
+      .catch(e => showToast(e.response?.data?.error || 'Failed to delete test case', 'error'))
       .finally(() => setActionLoading(false))
   }
 
@@ -191,9 +214,25 @@ export default function TestCaseDashboard() {
         )}
       </div>
 
-      <div style={{ fontSize: 12, color: 'var(--text-muted)', marginBottom: 12 }}>
-        Showing {filteredCases.length} test {filteredCases.length === 1 ? 'case' : 'cases'}
-      </div>
+      {filteredCases.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text-muted)' }}>
+            <span>Show</span>
+            <select className="form-select" style={{ padding: '4px 24px 4px 8px', fontSize: 13 }} value={pageSize} onChange={e => { setPageSize(e.target.value === 'All' ? 'All' : Number(e.target.value)); setPage(1) }}>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value="All">All</option>
+            </select>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <button className="btn btn-ghost" style={{ padding: '4px 8px' }} disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</button>
+            <span style={{ fontSize: 13 }}>Page {page} of {pageSize === 'All' ? 1 : Math.ceil(filteredCases.length / pageSize) || 1}</span>
+            <button className="btn btn-ghost" style={{ padding: '4px 8px' }} disabled={page >= (pageSize === 'All' ? 1 : Math.ceil(filteredCases.length / pageSize))} onClick={() => setPage(p => Math.min(Math.ceil(filteredCases.length / pageSize), p + 1))}>Next</button>
+          </div>
+        </div>
+      )}
 
       {filteredCases.length === 0 ? (
         <div className="empty-state card">
@@ -203,8 +242,12 @@ export default function TestCaseDashboard() {
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {filteredCases.map((tc, idx) => {
-            const uniqueKey = `${tc.plan_id}-${tc.id}`
+          {(() => {
+            const limit = pageSize === 'All' ? filteredCases.length : pageSize;
+            const startIndex = (page - 1) * limit;
+            const visibleCases = filteredCases.slice(startIndex, startIndex + limit);
+            return visibleCases.map((tc, idx) => {
+              const uniqueKey = `${tc.plan_id}-${tc.id}`
             const isEditing = editingId === uniqueKey
 
             if (isEditing) {
@@ -292,6 +335,14 @@ export default function TestCaseDashboard() {
                     </button>
                     <button 
                       className="btn btn-ghost" 
+                      style={{ fontSize: 11, padding: '4px 8px', color: 'var(--cyan)' }}
+                      onClick={() => handleGenerateScript(tc.plan_id, tc.id)}
+                      disabled={actionLoading || generateLoading === tc.id}
+                    >
+                      {generateLoading === tc.id ? '⏳ Gen...' : (tc.playwright_script ? '🔄 Regen' : '🤖 Gen')}
+                    </button>
+                    <button 
+                      className="btn btn-ghost" 
                       style={{ fontSize: 11, padding: '4px 8px', color: 'var(--red)' }}
                       onClick={() => handleDelete(tc.plan_id, tc.id)}
                       disabled={actionLoading}
@@ -338,7 +389,13 @@ export default function TestCaseDashboard() {
                 </div>
               </div>
             )
-          })}
+          })})()}
+        </div>
+      )}
+      
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === 'success' ? '✅' : '❌'} {toast.msg}
         </div>
       )}
     </div>

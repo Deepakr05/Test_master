@@ -39,6 +39,9 @@ export default function History() {
   const [previewLoading, setPreviewLoading] = useState(false)
   const [toast,     setToast]     = useState(null)
 
+  const [page, setPage] = useState(1)
+  const [pageSize, setPageSize] = useState(10)
+
   useEffect(() => { fetchHistory() }, [filter])
 
   async function fetchHistory() {
@@ -77,6 +80,7 @@ export default function History() {
     const blob = new Blob([csv], { type: 'text/csv' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a'); a.href = url; a.download = 'testmaster-history.csv'; a.click()
+    showToast('History exported to CSV!', 'success')
   }
 
   function copyPreviewMarkdown() {
@@ -127,6 +131,26 @@ export default function History() {
         </div>
       </div>
 
+      {records.length > 0 && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, fontSize: 13, color: 'var(--text-muted)' }}>
+            <span>Show</span>
+            <select className="form-select" style={{ padding: '4px 24px 4px 8px', fontSize: 13 }} value={pageSize} onChange={e => { setPageSize(e.target.value === 'All' ? 'All' : Number(e.target.value)); setPage(1) }}>
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value="All">All</option>
+            </select>
+          </div>
+          
+          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <button className="btn btn-ghost" style={{ padding: '4px 8px' }} disabled={page === 1} onClick={() => setPage(p => Math.max(1, p - 1))}>Previous</button>
+            <span style={{ fontSize: 13 }}>Page {page} of {pageSize === 'All' ? 1 : Math.ceil(records.length / pageSize) || 1}</span>
+            <button className="btn btn-ghost" style={{ padding: '4px 8px' }} disabled={page >= (pageSize === 'All' ? 1 : Math.ceil(records.length / pageSize))} onClick={() => setPage(p => Math.min(Math.ceil(records.length / pageSize), p + 1))}>Next</button>
+          </div>
+        </div>
+      )}
+
       {/* Main Panel */}
       <div style={{ display: 'grid', gridTemplateColumns: selected ? '1fr 360px' : '1fr', gap: 16, alignItems: 'start' }}>
 
@@ -154,12 +178,18 @@ export default function History() {
                   No test plans found.
                 </td></tr>
               )}
-              {records.map(r => (
-                <tr
-                  key={r.id}
-                  onClick={() => loadPreview(r.id)}
-                  style={{ background: selected === r.id ? 'rgba(0,229,204,0.04)' : undefined }}
-                >
+              
+              {(() => {
+                const limit = pageSize === 'All' ? records.length : pageSize;
+                const startIndex = (page - 1) * limit;
+                const visibleRecords = records.slice(startIndex, startIndex + limit);
+                
+                return visibleRecords.map(r => (
+                  <tr
+                    key={r.id}
+                    onClick={() => loadPreview(r.id)}
+                    style={{ background: selected === r.id ? 'rgba(0,229,204,0.04)' : undefined }}
+                  >
                   <td><span className="badge badge-cyan">{r.jira_id}</span></td>
                   <td style={{ maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
                     {r.jira_title || r.title}
@@ -181,7 +211,8 @@ export default function History() {
                     </button>
                   </td>
                 </tr>
-              ))}
+                ));
+              })()}
             </tbody>
           </table>
         </div>

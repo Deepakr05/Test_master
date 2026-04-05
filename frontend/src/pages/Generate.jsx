@@ -31,6 +31,11 @@ export default function Generate() {
   const [generating, setGenerating] = useState(false)
   const [loadStep,   setLoadStep]   = useState(0)
   const [genError,   setGenError]   = useState('')
+  const [toast,      setToast]      = useState(null)
+  function showToast(msg, type = 'info') {
+    setToast({ msg, type })
+    setTimeout(() => setToast(null), 3000)
+  }
 
   const loadInterval = useRef(null)
 
@@ -48,8 +53,10 @@ export default function Generate() {
     try {
       const r = await axios.get(`/api/jira/issue/${target}`)
       setIssue(r.data.data)
+      showToast('Jira issue fetched!', 'success')
     } catch(e) {
       setIssueError(e.response?.data?.error || 'Could not fetch issue. Check your Jira settings.')
+      showToast(e.response?.data?.error || 'Fetch failed', 'error')
     } finally {
       setIssueLoading(false)
     }
@@ -79,10 +86,12 @@ export default function Generate() {
         test_plan_format:     formats,
       })
       clearInterval(loadInterval.current)
-      navigate(`/plan/${r.data.data.id}`)
+      showToast('Success! Redirecting to test plan...', 'success')
+      setTimeout(() => navigate(`/plan/${r.data.data.id}`), 1000)
     } catch(e) {
       clearInterval(loadInterval.current)
       setGenError(e.response?.data?.error || 'Generation failed. Check your LLM API key in Settings.')
+      showToast(e.response?.data?.error || 'Generation failed', 'error')
       setGenerating(false)
     }
   }
@@ -353,20 +362,25 @@ export default function Generate() {
               <span className="toggle-slider" />
             </label>
           </div>
+          
+          <div className="divider" style={{ margin: '8px 0' }} />
+          
+          <button
+            className="btn btn-primary btn-lg"
+            onClick={handleGenerate}
+            disabled={!issue || generating}
+            style={{ width: '100%', padding: '12px 16px', fontSize: 14 }}
+          >
+            {generating ? <><span className="spinner" style={{ borderWidth: 2, width: 16, height: 16 }} /> Generating...</> : '⚡ Generate Test Plan'}
+          </button>
         </div>
       </div>
-
-      {/* Generate Button sticky bottom */}
-      <div style={{ position: 'sticky', bottom: 0, padding: '16px 0 0', marginTop: 20 }}>
-        <button
-          className="btn btn-primary btn-lg"
-          onClick={handleGenerate}
-          disabled={!issue || generating}
-          style={{ maxWidth: 760 }}
-        >
-          {generating ? <><span className="spinner" style={{ borderWidth: 2, width: 16, height: 16 }} /> Generating...</> : '⚡ Generate Test Plan'}
-        </button>
-      </div>
+      
+      {toast && (
+        <div className={`toast toast-${toast.type}`}>
+          {toast.type === 'success' ? '✅' : '❌'} {toast.msg}
+        </div>
+      )}
     </div>
   )
 }
